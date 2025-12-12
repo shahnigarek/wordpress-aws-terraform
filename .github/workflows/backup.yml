@@ -1,0 +1,117 @@
+name: Backup WordPress Database
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  backup-bash:
+    name: Backup using Bash Script
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Get RDS Endpoint
+        id: rds
+        working-directory: ./terraform
+        run: |
+          terraform init
+          echo "endpoint=$(terraform output -raw rds_address)" >> $GITHUB_OUTPUT
+
+      - name: Run Database Backup
+        env:
+          DB_NAME: wordpress
+          DB_USER: admin
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          RDS_ENDPOINT: ${{ steps.rds.outputs.endpoint }}
+        run: |
+          chmod +x ./scripts/backup_db.sh
+          ./scripts/backup_db.sh
+
+      - name: Upload Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wordpress-backup-${{ github.run_number }}
+          path: /tmp/db-backups/*.gz
+          retention-days: 7
+
+  backup-ansible:
+    name: Backup using Ansible
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible
+        run: |
+          pip install ansible boto3 botocore
+
+      - name: Install Ansible AWS Collection
+        run: ansible-galaxy collection install amazon.aws
+
+      - name: Install MySQL client
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Get RDS Endpoint
+        id: rds
+        working-directory: ./terraform
+        run: |
+          terraform init
+          echo "endpoint=$(terraform output -raw rds_address)" >> $GITHUB_OUTPUT
+
+      - name: Run Ansible Backup
+        env:
+          RDS_ENDPOINT: ${{ steps.rds.outputs.endpoint }}
+          DB_NAME: wordpress
+          DB_USER: admin
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          ansible-playbook ansible/backup_playbook.yml
+
+      - name: Upload Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wordpress-backup-ansible-${{ github.run_number }}
+          path: /tmp/wordpress-backups/*.gz
+          retention-days: 7

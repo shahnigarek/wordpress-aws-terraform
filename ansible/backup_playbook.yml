@@ -1,0 +1,66 @@
+---
+- name: Backup WordPress Database
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    backup_dir: "/tmp/wordpress-backups"
+    timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    
+  tasks:
+    - name: Install MySQL client
+      become: yes
+      package:
+        name: mysql
+        state: present
+      when: ansible_os_family == "Debian" or ansible_os_family == "RedHat"
+
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Get RDS endpoint from environment
+      set_fact:
+        rds_endpoint: "{{ lookup('env', 'RDS_ENDPOINT') }}"
+        db_name: "{{ lookup('env', 'DB_NAME') | default('wordpress', true) }}"
+        db_user: "{{ lookup('env', 'DB_USER') | default('admin', true) }}"
+        db_password: "{{ lookup('env', 'DB_PASSWORD') }}"
+
+    - name: Dump database
+      shell: |
+        mysqldump -h {{ rds_endpoint }} \
+                  -u {{ db_user }} \
+                  -p{{ db_password }} \
+                  {{ db_name }} > {{ backup_dir }}/wordpress_{{ timestamp }}.sql
+      no_log: true
+
+    - name: Compress backup
+      archive:
+        path: "{{ backup_dir }}/wordpress_{{ timestamp }}.sql"
+        dest: "{{ backup_dir }}/wordpress_{{ timestamp }}.sql.gz"
+        format: gz
+        remove: yes
+
+    - name: Upload backup to S3
+      amazon.aws.s3_object:
+        bucket: "{{ lookup('env', 'S3_BACKUP_BUCKET') }}"
+        object: "backups/wordpress_{{ timestamp }}.sql.gz"
+        src: "{{ backup_dir }}/wordpress_{{ timestamp }}.sql.gz"
+        mode: put
+      when: lookup('env', 'S3_BACKUP_BUCKET') != ''
+
+    - name: Clean old backups (keep 7 days)
+      find:
+        paths: "{{ backup_dir }}"
+        patterns: "*.gz"
+        age: 7d
+      register: old_backups
+
+    - name: Remove old backups
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backups.files }}"
