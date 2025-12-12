@@ -79,13 +79,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Trigger Backup Workflow
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'backup.yml',
-              ref: 'main'
-            });
+- name: Trigger Backup Workflow
+  uses: actions/github-script@v7
+  with:
+    github-token: ${{ secrets.MY_PAT }}
+    script: |
+      await github.rest.actions.createWorkflowDispatch({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        workflow_id: 'backup.yml',
+        ref: 'main'
+      });
