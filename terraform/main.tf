@@ -6,7 +6,7 @@ terraform {
 
     aws = {
 
-      source  = "hashicorp/aws"
+      source = "hashicorp/aws"
 
       version = "~> 5.0"
 
@@ -16,13 +16,12 @@ terraform {
 
   backend "s3" {
 
-   
 
-     bucket = "wp-terraform-state-1765470628"
+    bucket = "wp-terraform-state-1765470628"
 
-    # key    = "wordpress/terraform.tfstate"
+    key = "wordpress/terraform.tfstate"
 
-    # region = "eu-north-1"
+    region = "eu-north-1"
 
   }
 

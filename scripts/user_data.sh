@@ -15,8 +15,9 @@ curl -L "https://github.com/docker/compose/releases/latest/download/docker-compo
 chmod +x /usr/local/bin/docker-compose
 
 # Wait for RDS to be available
-DB_HOST="${db_host%%:*}"
-until nc -z -w 5 $DB_HOST 3306; do
+DB_HOST="${db_host}"
+DB_HOST_CLEAN="$${DB_HOST%%:*}"
+until nc -z -w 5 $DB_HOST_CLEAN 3306; do
   echo "Waiting for database..."
   sleep 5
 done
