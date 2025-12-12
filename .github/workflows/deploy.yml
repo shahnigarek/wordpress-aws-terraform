@@ -17,15 +17,15 @@ jobs:
   terraform:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
-    
+
     defaults:
       run:
         working-directory: ./terraform
-    
+
     outputs:
       alb_dns: ${{ steps.output.outputs.alb_dns }}
       rds_endpoint: ${{ steps.output.outputs.rds_endpoint }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -77,16 +77,16 @@ jobs:
     name: Trigger Database Backup
     needs: terraform
     runs-on: ubuntu-latest
-    
+
     steps:
-     - name: Trigger Backup Workflow
-       uses: actions/github-script@v7
-       with:
-         github-token: ${{ secrets.MY_PAT }}
-         script: |
-           await github.rest.actions.createWorkflowDispatch({
-             owner: context.repo.owner,
-             repo: context.repo.repo,
-             workflow_id: 'backup.yml',
-             ref: 'main'
-         });
+      - name: Trigger Backup Workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.MY_PAT }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'backup.yml',
+              ref: 'main'
+            });
